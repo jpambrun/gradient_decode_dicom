@@ -180,9 +180,6 @@ setup(
     author_email='marcelo@gradienthealth.io',
     # Contained modules and scripts.
     packages=find_packages(),
-    install_requires=[
-        'tensorflow >= 1.12.0',
-    ],
     # Add in any packaged data.
     include_package_data=True,
     zip_safe=False,
