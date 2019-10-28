@@ -16,12 +16,14 @@ def test_tf1():
 def test_tf2():
     for filename in tf.io.gfile.glob('*.dcm'):
       dcm_data = tf.io.read_file(filename)
-      im_np = decode_dicom_image(dcm_data, color_dim=False,
-        on_error='strict',
-        scale='preserve',
-        dtype=tf.float32,
-        name=None).numpy()
-      print(filename, im_np.shape, im_np)
+      im_float = decode_dicom_image(dcm_data, on_error='strict', dtype=tf.float32, color_dim=False).numpy()
+      im_int16 = decode_dicom_image(dcm_data, on_error='strict', dtype=tf.int16, color_dim=False).numpy()
+      im_int32 = decode_dicom_image(dcm_data, on_error='strict', dtype=tf.int32, color_dim=False).numpy()
+      im_int64 = decode_dicom_image(dcm_data, on_error='strict', dtype=tf.int64, color_dim=False).numpy()
+      print(filename, im_float.shape, im_float, im_float[0,225:227,220:230])
+      print(filename, im_int16.shape, im_int16, im_int16[0,225:227,220:230])
+      print(filename, im_int32.shape, im_int32, im_int32[0,225:227,220:230])
+      print(filename, im_int64.shape, im_int64, im_int64[0,225:227,220:230])
 
 print('TEST: TF version=' + tf.__version__)
 

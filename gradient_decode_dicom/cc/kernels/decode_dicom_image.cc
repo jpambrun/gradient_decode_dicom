@@ -44,6 +44,17 @@ typedef uint64_t Uint64; // Uint64 not present in tensorflow::custom-op docker i
 
 using namespace tensorflow;
 
+
+template <class T, class dtype>
+void copy_to_tensor (void* src, Tensor *dst, unsigned long len) {
+    auto output_flat = dst->template flat<dtype>();
+    T* pixels = reinterpret_cast<T*>(src);
+    for (unsigned long p = 0; p < len; p++)
+    {
+        output_flat(p) = (dtype)pixels[p];
+    }
+}
+
 template <typename dtype>
 class DecodeDICOMImageOp : public OpKernel
 {
@@ -104,7 +115,6 @@ public:
 
         unsigned long frameWidth = 0;
         unsigned long frameHeight = 0;
-        unsigned int pixelDepth = 0;
         unsigned long dataSize = 0;
         unsigned long frameCount = 0;
         unsigned int samples_per_pixel = 0;
@@ -131,7 +141,6 @@ public:
         frameCount = image->getFrameCount(); // getNumberOfFrames(); starts at version DCMTK-3.6.1_20140617
         frameWidth = image->getWidth();
         frameHeight = image->getHeight();
-        pixelDepth = image->getDepth();
         samples_per_pixel = image->isMonochrome() ? 1 : 3;
 
         // Create an output tensor shape
@@ -145,130 +154,43 @@ public:
             out_shape = TensorShape({frameCount, frameHeight, frameWidth, samples_per_pixel});
         }
 
-        // Check if output type is ok for image
-        if (pixelDepth > sizeof(dtype) * 8)
-        {
-            if (on_error == "strict")
-            {
-                OP_REQUIRES(context, false,
-                            errors::InvalidArgument("Input argument dtype size smaller than pixelDepth (bits):", pixelDepth));
-                return;
-            }
-            else if (on_error == "skip")
-            {
-                Tensor *output_tensor = NULL;
-                OP_REQUIRES_OK(context, context->allocate_output(0,
-                                                                 {0},
-                                                                 &output_tensor));
-                return;
-            }
-        }
-
         // Create an output tensor
         Tensor *output_tensor = NULL;
         OP_REQUIRES_OK(context, context->allocate_output(0,
                                                          out_shape,
                                                          &output_tensor));
 
-        auto output_flat = output_tensor->template flat<dtype>();
 
         unsigned long frame_pixel_count = frameHeight * frameWidth * samples_per_pixel;
 
         for (Uint64 f = 0; f < frameCount; f++)
         {
-            const void *image_frame = image->getOutputData(pixelDepth, f);
-
-            for (Uint64 p = 0; p < frame_pixel_count; p++)
+            const DiPixel* dipix = const_cast<DiPixel*>(  image->getInterData() );
+            void* mpixels = (const_cast<DiPixel*>(dipix))->getDataPtr();
+            auto len = frame_pixel_count * frameCount;
+            switch (dipix->getRepresentation())
             {
-                output_flat(f * frame_pixel_count + p) = convert_uintn_to_t(image_frame, pixelDepth, p);
+            case EPR_Uint8:
+                copy_to_tensor<unsigned char, dtype>(mpixels, output_tensor, len);
+                break;
+            case EPR_Sint8:
+                copy_to_tensor<signed char, dtype>(mpixels, output_tensor, len);
+                break;
+            case EPR_Uint16:
+                copy_to_tensor<unsigned short int, dtype>(mpixels, output_tensor, len);
+                break;
+            case EPR_Sint16:
+                copy_to_tensor<short int, dtype>(mpixels, output_tensor, len);
+                break;
+            case EPR_Uint32:
+                copy_to_tensor<unsigned int, dtype>(mpixels, output_tensor, len);
+                break;
+            case EPR_Sint32:
+                copy_to_tensor<signed int, dtype>(mpixels, output_tensor, len);
+                break;
             }
         }
         delete image;
-    }
-
-    dtype convert_uintn_to_t(const void *buff, unsigned int n_bits, unsigned int pos)
-    {
-        uint64 in_value;
-        if (n_bits <= 8)
-            in_value = *((const uint8 *)buff + pos);
-        else if (n_bits <= 16)
-            in_value = *((const uint16 *)buff + pos);
-        else if (n_bits <= 32)
-            in_value = *((const uint32 *)buff + pos);
-        else
-            in_value = *((const uint64 *)buff + pos);
-
-        dtype out;
-        uint64_to_t(in_value, n_bits, &out);
-        return out;
-    }
-
-    void uint64_to_t(uint64 in_value, unsigned int n_bits, uint8 *out_value)
-    {
-        if (scale == "auto")
-        {
-            in_value = in_value << (64 - n_bits);
-            *out_value = (dtype)(in_value >> (64 - 8 * sizeof(uint8)));
-        }
-        else if (scale == "preserve")
-        {
-            *out_value = in_value >= ((1ULL << 8 * sizeof(uint8)) - 1) ? (dtype)(((1ULL << 8 * sizeof(uint8)) - 1)) : (dtype)(in_value);
-        }
-    }
-
-    void uint64_to_t(uint64 in_value, unsigned int n_bits, uint16 *out_value)
-    {
-        if (scale == "auto")
-        {
-            in_value = in_value << (64 - n_bits);
-            *out_value = (dtype)(in_value >> (64 - 8 * sizeof(uint16)));
-        }
-        else if (scale == "preserve")
-        {
-            *out_value = in_value >= ((1ULL << 8 * sizeof(uint16)) - 1) ? (dtype)(((1ULL << 8 * sizeof(uint16)) - 1)) : (dtype)(in_value);
-        }
-    }
-
-    void uint64_to_t(uint64 in_value, unsigned int n_bits, uint32 *out_value)
-    {
-        if (scale == "auto")
-        {
-            in_value = in_value << (64 - n_bits);
-            *out_value = (dtype)(in_value >> (64 - 8 * sizeof(uint32)));
-        }
-        else if (scale == "preserve")
-        {
-            *out_value = in_value >= ((1ULL << 8 * sizeof(uint32)) - 1) ? (dtype)(((1ULL << 8 * sizeof(uint32)) - 1)) : (dtype)(in_value);
-        }
-    }
-
-    void uint64_to_t(uint64 in_value, unsigned int n_bits, uint64 *out_value)
-    {
-        *out_value = in_value;
-    }
-
-    void uint64_to_t(uint64 in_value, unsigned int n_bits, float *out_value)
-    {
-        if (scale == "auto")
-            *out_value = (float)(in_value) / (float)((1ULL << n_bits) - 1);
-        else if (scale == "preserve")
-            *out_value = (float)(in_value);
-    }
-
-    void uint64_to_t(uint64 in_value, unsigned int n_bits, Eigen::half *out_value)
-    {
-        if (scale == "auto")
-            *out_value = static_cast<Eigen::half>((double)(in_value) / (double)((1ULL << n_bits) - 1));
-        else if (scale == "preserve")
-            *out_value = static_cast<Eigen::half>(in_value);
-    }
-
-    void uint64_to_t(uint64 in_value, unsigned int n_bits, double *out_value)
-    {
-        if (scale == "auto")
-            *out_value = (double)(in_value) / (double)((1ULL << n_bits) - 1);
-        else if (scale == "preserve")
-            *out_value = (double)(in_value);
     }
 
     string on_error;
@@ -282,6 +204,10 @@ public:
         Name("DecodeDICOMImage").Device(DEVICE_CPU).TypeConstraint<dtype>("dtype"), \
         DecodeDICOMImageOp<dtype>);
 
+REGISTER_DECODE_DICOM_IMAGE_CPU(int8);
+REGISTER_DECODE_DICOM_IMAGE_CPU(int16);
+REGISTER_DECODE_DICOM_IMAGE_CPU(int32);
+REGISTER_DECODE_DICOM_IMAGE_CPU(int64);
 REGISTER_DECODE_DICOM_IMAGE_CPU(uint8);
 REGISTER_DECODE_DICOM_IMAGE_CPU(uint16);
 REGISTER_DECODE_DICOM_IMAGE_CPU(uint32);
