@@ -191,6 +191,7 @@ public:
             }
         }
         delete image;
+        delete dfile;
     }
 
     string on_error;
