@@ -65,6 +65,7 @@ tf_decode_dicom_ext = Extension(
         'm',
         'rt',
         'pthread',
+        'fmjpeg2k'
     ],
     library_dirs=['/usr/local/lib', tf_L, ],
     extra_compile_args=['-fPIC', '-w', '-O2'],

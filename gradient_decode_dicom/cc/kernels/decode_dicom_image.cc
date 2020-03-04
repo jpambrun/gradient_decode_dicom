@@ -33,6 +33,9 @@ limitations under the License.
 #include "dcmtk/dcmimage/dipipng.h"  /* for dcmimage PNG plugin */
 #include "dcmtk/dcmimage/diregist.h"
 
+#include "fmjpeg2k/djencode.h"
+#include "fmjpeg2k/djdecode.h"
+
 #include "tensorflow/core/framework/op.h"
 #include "tensorflow/core/framework/shape_inference.h"
 #include "tensorflow/core/framework/op_kernel.h"
@@ -73,6 +76,8 @@ public:
         DcmRLEDecoderRegistration::registerCodecs(); // register RLE codecs
         DJDecoderRegistration::registerCodecs();     // register JPEG codecs
         DJLSDecoderRegistration::registerCodecs();   // register JPEG-LS codecs
+        FMJPEG2KEncoderRegistration::registerCodecs();
+	    FMJPEG2KDecoderRegistration::registerCodecs();
     }
 
     ~DecodeDICOMImageOp()
@@ -80,6 +85,8 @@ public:
         DcmRLEDecoderRegistration::cleanup(); // deregister RLE codecs
         DJDecoderRegistration::cleanup();     // deregister JPEG codecs
         DJLSDecoderRegistration::cleanup();   // deregister JPEG-LS codecs
+        FMJPEG2KEncoderRegistration::cleanup();
+        FMJPEG2KDecoderRegistration::cleanup();
     }
 
     void Compute(OpKernelContext *context) override
