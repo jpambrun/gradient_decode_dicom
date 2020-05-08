@@ -1,7 +1,6 @@
-ARG TF_VER="2.0.1"
+ARG TF_VER="2.1.0-py3"
 
 FROM tensorflow/tensorflow:${TF_VER}
-ARG TF_VER="2.0.1"
 
 RUN apt update && apt install -y libopenjp2-7-dev libdcmtk-dev curl cmake checkinstall
 
@@ -25,12 +24,22 @@ RUN cd /tmp && \
     mkdir dist && \
     mv *.deb dist
 
-
 RUN mkdir /tmp/build
 WORKDIR /tmp/build
 
-COPY . /tmp/build
+COPY  gradient_decode_dicom gradient_decode_dicom
+COPY  setup.cfg setup.cfg
+COPY  setup.py setup.py
+COPY  README.md README.md
+COPY  test.cc test.cc
+
+
+RUN ls -lah /tmp/build/
 
 RUN python3 setup.py bdist_wheel
 RUN cd dist && python3 -m pip install *.whl && cd ..
+
+COPY test test
+ARG CACHEBUST=1
+
 RUN cd test && python test.py && cd ..

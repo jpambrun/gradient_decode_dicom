@@ -1,5 +1,5 @@
 import tensorflow as tf
-from gradient_decode_dicom import decode_dicom_image
+from gradient_decode_dicom import decode_dicom_image, decode_dicom_data, tags
 
 def test_tf1():
     g = tf.Graph()
@@ -14,16 +14,40 @@ def test_tf1():
             print(im_np.shape)
 
 def test_tf2():
-    for filename in tf.io.gfile.glob('*.dcm'):
-      dcm_data = tf.io.read_file(filename)
-      im_float = decode_dicom_image(dcm_data, on_error='strict', dtype=tf.float32, color_dim=False).numpy()
-      im_int16 = decode_dicom_image(dcm_data, on_error='strict', dtype=tf.int16, color_dim=False).numpy()
-      im_int32 = decode_dicom_image(dcm_data, on_error='strict', dtype=tf.int32, color_dim=False).numpy()
-      im_int64 = decode_dicom_image(dcm_data, on_error='strict', dtype=tf.int64, color_dim=False).numpy()
-      print(filename, im_float.shape, im_float, im_float[0,225:227,220:230])
-      print(filename, im_int16.shape, im_int16, im_int16[0,225:227,220:230])
-      print(filename, im_int32.shape, im_int32, im_int32[0,225:227,220:230])
-      print(filename, im_int64.shape, im_int64, im_int64[0,225:227,220:230])
+    # @tf.function # breaks dcmtk somehow
+    def preprocess(dcm_content):
+        dcm_tags = decode_dicom_data(
+            dcm_content, tags=[tags.ImageOrientationPatient, tags.PixelSpacing]
+        )
+        iop = tf.strings.to_number(tf.strings.split([dcm_tags[0]], sep="\\")[0])
+        image = decode_dicom_image(dcm_content, dtype=tf.float32)
+        image.set_shape([1, None, None, 1])
+        if iop[0] < 0:
+            image = tf.image.flip_up_down(image)
+        if iop[4] < 0:
+            image = tf.image.flip_left_right(image)
+        image = tf.image.resize_with_pad(image, 224, 224, antialias=True)
+        i_min = tf.reduce_min(image)
+        image_masked = tf.boolean_mask(image, image > i_min + 2)
+        i_mean = tf.math.reduce_mean(image_masked)
+        i_std = tf.math.reduce_std(image_masked)
+        image = tf.clip_by_value(image, i_mean - 4 * i_std, i_mean + 4 * i_std)
+        image = (image - i_mean) / (2 * i_std)
+        image = tf.image.grayscale_to_rgb(image)
+        image = tf.reshape(image, [224, 224, 3])
+        return image
+
+    dataset = (
+        tf.data.Dataset.list_files("*.dcm")
+        .map(tf.io.read_file)
+        .repeat()
+        .map(preprocess, num_parallel_calls=4)
+        .take(300)
+    )
+
+    for i, item in enumerate(dataset):
+        if i % 100 == 0:
+            print(tf.shape(item), i)
 
 print('TEST: TF version=' + tf.__version__)
 
