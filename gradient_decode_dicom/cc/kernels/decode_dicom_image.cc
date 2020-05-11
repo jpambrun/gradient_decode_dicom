@@ -42,6 +42,7 @@ limitations under the License.
 #include "tensorflow/core/framework/types.h"
 #include <cstdint>
 #include <exception>
+#include <mutex>
 
 typedef uint64_t Uint64; // Uint64 not present in tensorflow::custom-op docker image dcmtk
 
@@ -58,6 +59,47 @@ void copy_to_tensor (void* src, Tensor *dst, unsigned long len) {
     }
 }
 
+// backported from github.com/tensorflow/io
+// FMJPEG2K is not safe to cleanup, so use DecoderRegistration
+// to provide protection and only cleanup during program exit.
+class DecoderRegistration {
+ public:
+  static void registerCodecs() { instance().registration(); }
+  static void cleanup() {}
+
+ private:
+  explicit DecoderRegistration() : initialized_(false) {}
+  ~DecoderRegistration() {
+    mutex_lock l(mu_);
+    if (initialized_) {
+      DcmRLEDecoderRegistration::cleanup();    // deregister RLE codecs
+      DJDecoderRegistration::cleanup();        // deregister JPEG codecs
+      DJLSDecoderRegistration::cleanup();      // deregister JPEG-LS codecs
+      FMJPEG2KDecoderRegistration::cleanup();  // deregister fmjpeg2koj
+      initialized_ = false;
+    }
+  }
+
+  void registration() {
+    mutex_lock l(mu_);
+    if (!initialized_) {
+      DcmRLEDecoderRegistration::registerCodecs();    // register RLE codecs
+      DJDecoderRegistration::registerCodecs();        // register JPEG codecs
+      DJLSDecoderRegistration::registerCodecs();      // register JPEG-LS codecs
+      FMJPEG2KDecoderRegistration::registerCodecs();  // register fmjpeg2koj
+      initialized_ = true;
+    }
+  }
+  static DecoderRegistration &instance() {
+    static DecoderRegistration decoder_registration;
+    return decoder_registration;
+  }
+
+ private:
+  mutex mu_;
+  bool initialized_ TF_GUARDED_BY(mu_);
+};
+
 template <typename dtype>
 class DecodeDICOMImageOp : public OpKernel
 {
@@ -73,20 +115,12 @@ public:
         // Get the color_dim
         OP_REQUIRES_OK(context, context->GetAttr("color_dim", &color_dim));
 
-        DcmRLEDecoderRegistration::registerCodecs(); // register RLE codecs
-        DJDecoderRegistration::registerCodecs();     // register JPEG codecs
-        DJLSDecoderRegistration::registerCodecs();   // register JPEG-LS codecs
-        FMJPEG2KEncoderRegistration::registerCodecs();
-	    FMJPEG2KDecoderRegistration::registerCodecs();
+        DecoderRegistration::registerCodecs();
     }
 
     ~DecodeDICOMImageOp()
     {
-        DcmRLEDecoderRegistration::cleanup(); // deregister RLE codecs
-        DJDecoderRegistration::cleanup();     // deregister JPEG codecs
-        DJLSDecoderRegistration::cleanup();   // deregister JPEG-LS codecs
-        FMJPEG2KEncoderRegistration::cleanup();
-        FMJPEG2KDecoderRegistration::cleanup();
+        DecoderRegistration::cleanup();
     }
 
     void Compute(OpKernelContext *context) override
@@ -98,7 +132,7 @@ public:
                         "DecodeDICOMImage expects input content tensor to be scalar, but had shape: ",
                         in_contents.shape().DebugString()));
 
-        const auto in_contents_scalar = in_contents.scalar<string>()();
+        const auto in_contents_scalar = in_contents.scalar<tstring>()();
 
         // Load Dicom Image
         DcmInputBufferStream dataBuf;

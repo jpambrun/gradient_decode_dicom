@@ -1,4 +1,4 @@
-ARG TF_VER="2.1.0-py3"
+ARG TF_VER="2.2.0"
 
 FROM tensorflow/tensorflow:${TF_VER}
 

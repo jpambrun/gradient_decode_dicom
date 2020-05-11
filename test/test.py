@@ -14,7 +14,7 @@ def test_tf1():
             print(im_np.shape)
 
 def test_tf2():
-    # @tf.function # breaks dcmtk somehow
+    @tf.function
     def preprocess(dcm_content):
         dcm_tags = decode_dicom_data(
             dcm_content, tags=[tags.ImageOrientationPatient, tags.PixelSpacing]
@@ -42,7 +42,7 @@ def test_tf2():
         .map(tf.io.read_file)
         .repeat()
         .map(preprocess, num_parallel_calls=4)
-        .take(300)
+        .take(3000)
     )
 
     for i, item in enumerate(dataset):
