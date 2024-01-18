@@ -104,9 +104,8 @@ deps_fix = [
 
 
 def get_ext_filename_without_platform_suffix(filename):
-    print(filename)
     name, ext = os.path.splitext(filename)
-    ext_suffix = sysconfig.get_config_var('SO')
+    ext_suffix = sysconfig.get_config_var('EXT_SUFFIX')
 
     if ext_suffix == ext:
         return filename
@@ -119,11 +118,9 @@ def get_ext_filename_without_platform_suffix(filename):
     else:
         return name[:idx] + ext
 
-
-class BuildExtWithoutPlatformSuffix(build_ext, object):
+class BuildExtWithoutPlatformSuffix(build_ext):
     def get_ext_filename(self, ext_name):
-        filename = super(BuildExtWithoutPlatformSuffix,
-                         self).get_ext_filename(ext_name)
+        filename = super().get_ext_filename(ext_name)
         return get_ext_filename_without_platform_suffix(filename)
 
 

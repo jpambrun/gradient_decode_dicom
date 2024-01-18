@@ -1,4 +1,4 @@
-ARG TF_VER="2.2.0"
+ARG TF_VER="2.15.0"
 FROM tensorflow/tensorflow:${TF_VER}
 
 RUN apt update && apt install -y libopenjp2-7-dev libdcmtk-dev curl cmake checkinstall
@@ -9,11 +9,12 @@ ENV BUILD_VER=${BUILD_VER}
 RUN cd /tmp && \
     curl -L  https://github.com/DraconPern/fmjpeg2koj/archive/master.tar.gz | tar xvz && \
     cd fmjpeg2koj-master && \
+    sed -i 's/CMAKE_CXX_STANDARD 11/CMAKE_CXX_STANDARD 17/' CMakeLists.txt && \
     cmake -DCMAKE_INSTALL_PREFIX=/usr . && \
     make -j4 && \
     checkinstall -D -y \
       --install=no \
-      --fstrans=yes \
+      --fstrans=no \
       --reset-uids=yes \
       --pkgname=fmjpeg2koj \
       --pkgversion=${BUILD_VER} \
