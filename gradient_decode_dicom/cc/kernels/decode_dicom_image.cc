@@ -15,6 +15,7 @@ limitations under the License.
 ==============================================================================*/
 
 #include "dcmtk/config/osconfig.h"
+#include "dcmtk/oflog/oflog.h" 
 
 #include "dcmtk/dcmdata/dctk.h"
 #include "dcmtk/ofstd/ofstring.h"
@@ -68,7 +69,9 @@ class DecoderRegistration {
   static void cleanup() {}
 
  private:
-  explicit DecoderRegistration() : initialized_(false) {}
+  explicit DecoderRegistration() : initialized_(false) {
+    OFLog::configure(OFLogger::ERROR_LOG_LEVEL);
+  }
   ~DecoderRegistration() {
     mutex_lock l(mu_);
     if (initialized_) {

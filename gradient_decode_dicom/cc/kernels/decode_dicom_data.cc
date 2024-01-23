@@ -15,6 +15,7 @@ limitations under the License.
 ==============================================================================*/
 
 #include "dcmtk/config/osconfig.h"
+#include "dcmtk/oflog/oflog.h" 
 
 #include "dcmtk/dcmdata/dctk.h"
 #include "dcmtk/ofstd/ofstring.h"
@@ -34,6 +35,7 @@ class DecodeDICOMDataOp : public OpKernel
 public:
     explicit DecodeDICOMDataOp(OpKernelConstruction *context) : OpKernel(context)
     {
+        OFLog::configure(OFLogger::ERROR_LOG_LEVEL);
     }
 
     ~DecodeDICOMDataOp()
