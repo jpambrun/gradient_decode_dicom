@@ -1,5 +1,5 @@
-TF_VER=2.15.0
-BUILD_VER=$(TF_VER)-1
+TF_VER=2.15.0.post1
+BUILD_VER=2.15.0-1
 
 .DEFAULT_GOAL := all
 .PHONY: build clean

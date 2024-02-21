@@ -1,4 +1,4 @@
-ARG TF_VER="2.15.0"
+ARG TF_VER="2.15.0.post1"
 FROM tensorflow/tensorflow:${TF_VER}
 
 RUN apt update && apt install -y libopenjp2-7-dev libdcmtk-dev curl cmake checkinstall
